@@ -1,0 +1,29 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "agentbox"
+version = "0.1.0"
+description = "A traced sandbox for ARCTIC: run untrusted targets while host tracers observe them."
+requires-python = ">=3.10"
+readme = "README.md"
+dependencies = []
+
+[project.optional-dependencies]
+# The sandbox/tracer core has no third-party deps. The agent does.
+agent = [
+    "langchain>=0.3,<0.4",
+    "langchain-anthropic>=0.3,<0.4",
+    "langchain-core>=0.3,<0.4",
+]
+dev = ["pytest>=8.0"]
+
+[project.scripts]
+agentbox-agent = "agentbox.agent.agent:main"
+
+[tool.setuptools.packages.find]
+include = ["agentbox*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
