@@ -10,28 +10,23 @@ agent (LLM) ──run_in_sandbox──▶  sandbox  ──runs──▶  target
      └──── bounded trace summary ◀──┴── tracer observes ┘
 ```
 
-> **Baseline status.** What's here is the baseline: a LangChain agent calling a
-> **mock sandbox with no containment**, to pin the interfaces. Real isolation
-> (bubblewrap → gVisor → Firecracker) is the roadmap in [PRD.md](PRD.md). The
-> mock must only run **benign** code. See [CLAUDE.md](CLAUDE.md) for the rules.
+> The real backend is `NsSandbox` (Linux namespaces + seccomp); `MockSandbox`
+> is the uncontained stand-in for other hosts and must only run **benign** code.
 
 ## Layout
 
-- `agentbox/sandbox/` — the `Sandbox` ADT (`base.py`) and the `MockSandbox` baseline.
+- `agentbox/sandbox/` — the `Sandbox` ADT (`base.py`), `MockSandbox`, and the
+  Linux `NsSandbox` (`ns.py`) with its `abx_init` runtime.
 - `agentbox/tracing/` — the `Tracer` ADT and strace/gdb/dtrace connectors.
-- `agentbox/agent/` — the LangChain agent and the `run_in_sandbox` tool (the
-  one-way, bounded channel back to the LLM).
-- `examples/`, `scripts/smoke.py`, `tests/` — a benign canary + crasher, a no-LLM
-  demo, and tests.
-
-Design: [PRD.md](PRD.md). Sandbox survey + research questions: [RESEARCH.md](RESEARCH.md).
+- `agentbox/agent/` — the LangChain agent and its sandbox tools (the one-way,
+  bounded channel back to the LLM).
+- `examples/`, `scripts/`, `tests/` — a benign canary + crasher, demos, and tests.
 
 ## Quickstart
 
 **1. See the sandbox + tracer work, no API key:**
 
 ```sh
-cd Agentbox
 python scripts/smoke.py
 ```
 
@@ -50,7 +45,7 @@ python -m pytest -q
 
 ```sh
 docker/run.sh                        # weak-vs-hardened gradient, all dimensions
-docker/run.sh python3 -m pytest -q   # full suite (37 tests)
+docker/run.sh python3 scripts/run_tests.py   # full suite (48 tests)
 ```
 
 `NsSandbox` isolates every dimension — filesystem, network, process/PID, fork &
@@ -66,8 +61,7 @@ python3 scripts/trace_demo.py        # Linux
 ```
 
 - **strace (syscalls)** — host-side tracer follows into the *hardened* sandbox and
-  records the target's syscalls (works even though the target's own ptrace is
-  seccomp-denied); the trace file is on the host, one-way by construction.
+  records the target's syscalls, the trace file is on the host, one-way by construction.
   `NsSandbox.run(spec, tracer="strace")`.
 - **gdb (crash backtrace)** — in-sandbox tracer (host gdb hangs across namespaces)
   runs the target and writes its backtrace to an exported `/out`.

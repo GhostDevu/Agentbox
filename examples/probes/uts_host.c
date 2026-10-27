@@ -1,7 +1,5 @@
-/* Probe UTS: is the target in an isolated UTS namespace?
- * hardened gives a new UTS namespace with hostname "agentbox" (and the target
- * cannot change the host's hostname) -> CONTAINED. weak shares the host UTS
- * namespace, so the hostname is the host's -> CROSSED. Benign: read-only. */
+/* Probe UTS namespace: a new one has hostname "agentbox" (CONTAINED); a shared
+ * one shows the host's hostname (CROSSED). Benign: read-only. */
 #include <stdio.h>
 #include <string.h>
 #include <unistd.h>

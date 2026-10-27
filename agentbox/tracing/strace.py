@@ -1,11 +1,6 @@
-"""strace connector (Linux). ARCTIC's primary syscall-level signal.
-
-`strace -f` follows forks so a target that spawns children is still observed.
-This is launch-as-child: strace is the parent, so there is no attach race and
-the first syscall is captured. Note the observer effect -- strace uses ptrace,
-which serializes the target and can mask timing-sensitive bugs (RESEARCH.md
-Q15-Q16); that caveat is a property of this tracer, recorded here on purpose.
-"""
+# strace -f follows forks and captures the first syscall (launch-as-child).
+# Observer effect: ptrace serializes the target and can mask timing-sensitive bugs.
+"""strace connector (Linux): syscall-level tracing."""
 from __future__ import annotations
 
 from .base import Tracer

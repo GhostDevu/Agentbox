@@ -1,18 +1,7 @@
-"""NsSandbox: our own namespace-based sandbox (the first REAL backend).
-
-It drives `abx_init` (agentbox/runtime/abx_init.c), compiled on first use, to run
-a target inside Linux namespaces with a pivoted read-only root, no network,
-dropped capabilities and rlimits. Containment level: "namespaces". The tracer is
-not this backend's concern (per the current workstream split); runs go untraced.
-
-Scope of this initial cut:
-  * Linux only. On macOS it raises with a clear message -- develop/test in the
-    Linux VM (or Docker). The MockSandbox remains the dev-host stand-in.
-  * Targets are run from a MINIMAL rootfs. C sources are compiled STATICALLY so
-    the rootfs needs only the binary plus /proc, /tmp, /dev mountpoints -- no
-    libc to assemble. Dynamic binaries and a full userspace (for Python targets
-    or real samples) are the next step (bind libs / use an alpine rootfs).
-"""
+# Drives abx_init (compiled on first use) to run a target inside Linux namespaces
+# with a pivoted read-only root, no network, dropped caps and rlimits. Linux only;
+# C targets are compiled static so the rootfs needs only the binary + mountpoints.
+"""NsSandbox: the namespace-based sandbox backend."""
 from __future__ import annotations
 
 import hashlib
@@ -71,14 +60,10 @@ class NsSandbox(Sandbox):
 
     # ---- assemble a minimal rootfs for one run ----------------------------
     def _build_rootfs(self, code: CodeObject, rundir: str) -> tuple[str, str, str]:
-        """Return (rootfs_dir, in_sandbox_prog_path, host_prog_path).
-
-        With pivot the target is run via its in-rootfs path; without pivot (weak
-        policy, host FS kept) it must be run via its real host path."""
+        """Return (rootfs_dir, in_sandbox_prog_path, host_prog_path)."""
         rootfs = os.path.join(rundir, "rootfs")
-        # /app holds the target; it is deliberately NOT a path that the gdb
-        # tracing mode binds the host toolchain over (/bin, /usr, ...), so the
-        # target stays visible even with a tooled rootfs.
+        # /app holds the target; gdb mode never binds the host toolchain over it,
+        # so the target stays visible even with a tooled rootfs.
         for d in ("proc", "tmp", "dev", "app"):
             os.makedirs(os.path.join(rootfs, d), exist_ok=True)
         prog_in = "/app/target"
@@ -101,13 +86,10 @@ class NsSandbox(Sandbox):
                 raise FileNotFoundError(f"binary not found: {code.path}")
             shutil.copyfile(code.path, dst)
             os.chmod(dst, 0o755)
-            # NOTE: a dynamically-linked binary will fail inside the pivoted
-            # rootfs (no libs). Statically link real binaries for now.
+            # A dynamically-linked binary fails in the pivoted rootfs; link static.
         else:
             raise ValueError(
-                f"NsSandbox initial cut supports C and static BINARY, not "
-                f"{code.language}. Python targets need an interpreter in the "
-                f"rootfs (future work)."
+                f"NsSandbox supports C and static BINARY, not {code.language}"
             )
         return rootfs, prog_in, os.path.abspath(dst)
 
@@ -129,26 +111,19 @@ class NsSandbox(Sandbox):
         timeout = spec.timeout_s or self.limits.wall_timeout_s
         try:
             rootfs, prog_in, prog_host = self._build_rootfs(spec.code, rundir)
-            # With pivot_root the in-rootfs path is correct; without it (weak
-            # policy keeps the host FS), the binary must be named by host path.
+            # In-rootfs path under pivot; host path when weak policy keeps the host FS.
             prog = prog_in if self.policy.pivot else prog_host
             policy_args = list(self.policy.to_args(rootfs))
-            # A delegated, controller-enabled cgroup parent (for cgroup v2
-            # pids.max/memory.max) is environment-provided: the current cgroup on
-            # a real VM, or one the Docker harness prepares. abx_init falls back
-            # to rlimits when it is absent or not writable.
+            # Optional cgroup v2 parent for pids.max/memory.max; abx_init falls
+            # back to rlimits when it is absent or not writable.
             cg_parent = os.environ.get("AGENTBOX_CGROUP_PARENT")
             if cg_parent:
                 policy_args += ["--cgroup-parent", cg_parent]
             sandbox_argv = [init_bin, *policy_args, "--", prog, *spec.argv]
 
-            # ---- one-way tracing (host-side) --------------------------------
-            # The tracer runs OUTSIDE the sandbox as the parent of abx_init, so
-            # its trace file lives on the host and the target can neither read
-            # nor tamper with it -- a one-way export channel. strace -f follows
-            # the clone into the sandbox and records the target's own syscalls;
-            # this works even under the hardened seccomp filter, because the
-            # filter restricts the *target's* syscalls, not an external tracer.
+            # One-way tracing: the host-side tracer is abx_init's parent, so its
+            # trace file is on the host and strace -f still records the target's
+            # syscalls (seccomp restricts the target, not an external tracer).
             tracer = (spec.tracer or "none").lower()
             trace_file = None
             trace_note = ""
@@ -214,16 +189,11 @@ class NsSandbox(Sandbox):
 
     # ---- trace collection -------------------------------------------------
     def _collect_strace(self, path: str, prog: str) -> TraceArtifact:
-        """Isolate the TARGET's syscalls from a `strace -f` log and bound them.
-
-        strace -f prefixes each line with the pid; abx_init and its setup
-        (clone/mount/pivot_root) appear too, so we keep only the pid that
-        execve'd the target program -- that is the trace ARCTIC cares about."""
+        """Keep only the target pid's syscalls from a `strace -f` log, bounded."""
         with open(path, errors="replace") as fh:
             lines = fh.readlines()
-        # Match the execve whose *program* (first arg to execve) is the target,
-        # not any line that merely mentions the path -- abx_init's own execve
-        # line lists "/bin/target" among its arguments and must not match.
+        # Match the execve whose program is the target, not abx_init's own execve
+        # line (which merely lists the path among its arguments).
         needle = f'execve("{prog}"'
         target_pid = None
         start = 0
@@ -235,8 +205,8 @@ class NsSandbox(Sandbox):
                     start = i  # drop abx_init's setup syscalls before the exec
                     break
         if target_pid:
-            # the clone-child keeps its pid across execve, so the target's own
-            # syscalls are this pid's lines from the target execve onward.
+            # The pid survives execve, so the target's syscalls are this pid's
+            # lines from the target execve onward.
             kept = [ln for ln in lines[start:]
                     if (ln.split(None, 1)[:1] or [""])[0] == target_pid]
             note = f"target pid {target_pid}; {len(kept)} syscall lines from execve"
@@ -252,23 +222,15 @@ class NsSandbox(Sandbox):
         return TraceArtifact(tracer="strace", raw_path=None, summary=summary,
                              truncated=truncated, note=note)
 
-    # ---- gdb crash tracing (in-sandbox tracer -> exported /out) -----------
-    # Read-only host paths that make gdb runnable in-sandbox. Deliberately NOT
-    # /etc (would expose /etc/shadow etc.) nor /home, /root, /var -- gdb runs
-    # fine with just the toolchain and libraries. This is a documented, narrowed
-    # reduction of filesystem isolation that applies ONLY in gdb tracing mode.
+    # Read-only host paths that make gdb runnable in-sandbox; deliberately not
+    # /etc, /home, /root, /var. A narrowed FS relaxation for gdb mode only.
     DEFAULT_TOOL_BINDS = ("/usr", "/lib", "/lib64", "/bin", "/sbin")
 
     def trace_gdb(self, spec: RunSpec, tool_binds=None) -> RunResult:
-        """Run the target under gdb INSIDE the sandbox and export its crash
-        backtrace one-way via /out.
+        """Run the target under in-sandbox gdb and export its crash backtrace via /out.
 
-        Host-side gdb hangs following a fork across new user/PID namespaces, so
-        the tracer runs in-guest: abx_init execs gdb (made available by binding
-        the host toolchain read-only), gdb runs the target as its child in the
-        same namespaces, and writes the backtrace to /out -- a host directory
-        mounted rw only for the trace. Uses the `traced` policy (ptrace allowed
-        under seccomp); every other isolation dimension stays on."""
+        Host gdb hangs following a fork across new user/PID namespaces, so gdb runs
+        in-guest under the `traced` policy with the host toolchain bound read-only."""
         init_bin = self._ensure_init()
         os.makedirs(CONFIG.work_root, exist_ok=True)
         rundir = tempfile.mkdtemp(prefix=f"gdb-{uuid.uuid4().hex[:8]}-", dir=CONFIG.work_root)
@@ -349,19 +311,11 @@ class NsSandbox(Sandbox):
         finally:
             shutil.rmtree(rundir, ignore_errors=True)
 
-    # ---- interactive gdb for an external agent ----------------------------
     def open_gdb(self, spec: RunSpec, tool_binds=None, default_timeout: float = 10.0):
-        """Open an INTERACTIVE gdb session an external agent can drive.
+        """Open an interactive gdb session an external agent drives over a host pty.
 
-        gdb runs IN the sandbox (so its symbol/DWARF parser -- attacker-
-        influenced data -- stays contained), with its terminal wired to a host
-        pseudo-terminal. The returned GdbSession lives on the host, outside the
-        sandbox, and lets a caller set breakpoints, run, step, inspect memory and
-        variables, and continue -- the iterative tracing ARCTIC needs. The target
-        is gdb's contained inferior and cannot reach the agent.
-
-        Caller owns the session: use it as a context manager or call .close().
-        """
+        gdb runs in the sandbox (its DWARF parser stays contained); the returned
+        GdbSession lives on the host. Caller owns it: context manager or .close()."""
         import pty
 
         init_bin = self._ensure_init()
@@ -402,13 +356,7 @@ class NsSandbox(Sandbox):
 
 
 class GdbSession:
-    """A live, interactive gdb session an external agent drives over a host pty.
-
-    The sandboxed gdb's terminal is the slave end of a pty; this object holds the
-    master end on the host. Commands are written and output is read back up to the
-    next gdb prompt. The agent is fully external to the sandbox; the debugged
-    target is gdb's contained inferior.
-    """
+    """A live gdb session driven over a host pty; the sandboxed gdb is at the slave end."""
 
     PROMPT = b"(gdb)"
 
@@ -439,8 +387,7 @@ class GdbSession:
         return buf.decode("utf-8", "replace")
 
     def command(self, cmd: str, timeout: float | None = None) -> str:
-        """Send one gdb command, return its output (echo and trailing prompt
-        stripped). This is the primitive the agent uses to drive the session."""
+        """Send one gdb command and return its output (echo and trailing prompt stripped)."""
         if self._closed:
             raise RuntimeError("gdb session is closed")
         os.write(self._fd, (cmd + "\n").encode())

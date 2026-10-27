@@ -1,19 +1,6 @@
-"""MockSandbox: the baseline stand-in. NO CONTAINMENT.
-
-It builds (if needed) and runs the target *as a child process on the host*,
-optionally under a host tracer, then returns a bounded result. It exists to pin
-the interfaces and prove the data flow
-
-    agent -> invoke -> [ run target ] <- host tracer observes -> bounded result
-
-end to end, so the containment layers can be slotted in behind `Sandbox` later.
-
-SAFETY: because this backend provides zero isolation, it must only ever run
-*benign* programs: the canary/probe suite and hello-world fidelity targets. Do
-NOT feed it untrusted or malicious samples -- that is what the real backends
-(bubblewrap/gVisor/Firecracker) are for. The repo rule stands: never run
-untrusted samples directly on the macOS host.
-"""
+# Builds and runs the target as a host child process under an optional host
+# tracer. SAFETY: zero isolation -- run only benign code through it.
+"""MockSandbox: the uncontained baseline backend."""
 from __future__ import annotations
 
 import os
@@ -37,10 +24,8 @@ class MockSandbox(Sandbox):
     def __init__(self, limits: Limits | None = None) -> None:
         self.limits = limits or CONFIG.limits
 
-    # ---- build -----------------------------------------------------------
     def _materialize(self, code: CodeObject, workdir: str) -> list[str]:
-        """Return the base argv (program + no target args) for `code`, building
-        from source into `workdir` when necessary."""
+        """Return the base argv for `code`, building from source into `workdir` if needed."""
         if code.language == Language.BINARY:
             if not code.path or not os.path.exists(code.path):
                 raise FileNotFoundError(f"binary not found: {code.path}")
@@ -49,8 +34,7 @@ class MockSandbox(Sandbox):
         if code.language == Language.PYTHON:
             src = os.path.join(workdir, f"{code.name}.py")
             self._write_source(code, src)
-            # -I: isolated mode, so the target can't import from the cwd/env.
-            return [sys.executable, "-I", src]
+            return [sys.executable, "-I", src]      # -I: can't import from cwd/env
 
         if code.language == Language.C:
             src = os.path.join(workdir, f"{code.name}.c")
@@ -59,7 +43,7 @@ class MockSandbox(Sandbox):
             cc = shutil.which("cc") or shutil.which("gcc") or shutil.which("clang")
             if not cc:
                 raise RuntimeError("no C compiler (cc/gcc/clang) on PATH")
-            # -g for symbols (gdb backtraces); -O0 to keep the trace readable.
+            # -g for gdb symbols; -O0 to keep the trace readable.
             proc = subprocess.run(
                 [cc, "-g", "-O0", "-o", out, src],
                 capture_output=True, text=True, timeout=60,
@@ -113,7 +97,7 @@ class MockSandbox(Sandbox):
                 )
                 exit_code = proc.returncode
                 stdout, stderr = proc.stdout, proc.stderr
-                # subprocess reports a signal death as a negative returncode.
+                # subprocess reports signal death as a negative returncode.
                 if exit_code is not None and exit_code < 0:
                     term_signal = -exit_code
             except subprocess.TimeoutExpired as exc:
@@ -143,8 +127,7 @@ class MockSandbox(Sandbox):
                 meta={"workdir": workdir, "launch_argv": launch_argv},
             )
         finally:
-            # Teardown is a first-class guarantee even for the mock, so the
-            # "no leftovers" invariant is exercised from day one.
+            # Teardown is a first-class guarantee: no leftovers.
             shutil.rmtree(workdir, ignore_errors=True)
 
 

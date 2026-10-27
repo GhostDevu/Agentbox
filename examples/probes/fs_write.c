@@ -1,7 +1,5 @@
-/* Probe FS-WRITE: can the target write to the root filesystem?
- * hardened remounts / read-only -> write fails (CONTAINED). weak keeps a
- * writable host-root view -> write succeeds (CROSSED). Benign: removes the file
- * it creates. */
+/* Probe root-FS write: read-only root fails (CONTAINED), writable root succeeds
+ * (CROSSED). Benign: removes the file it creates. */
 #include <stdio.h>
 #include <unistd.h>
 

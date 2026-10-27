@@ -1,9 +1,4 @@
-"""Sandbox ADT and implementations.
-
-`base` defines the interface every sandbox must satisfy. `mock` is the baseline
-stand-in with NO containment. Future backends (bubblewrap, gVisor, Firecracker)
-implement the same `Sandbox` interface so the agent never changes.
-"""
+"""Sandbox ADT and implementations (mock + Linux namespaces)."""
 from .base import CodeObject, RunResult, RunSpec, Sandbox, TraceArtifact
 from .mock import MockSandbox
 from .policy import Policy, custom, hardened, traced, weak
@@ -24,9 +19,7 @@ __all__ = [
 
 
 def __getattr__(name):
-    # Lazy import so the package stays importable on macOS, where NsSandbox
-    # refuses to construct but the module itself pulls in Linux-only ideas only
-    # at call time.
+    # Lazy import so the package stays importable off Linux.
     if name == "NsSandbox":
         from .ns import NsSandbox
         return NsSandbox

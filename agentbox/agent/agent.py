@@ -1,13 +1,7 @@
-"""Build and run the Agentbox LangChain agent.
-
-The agent is a tool-calling loop around the sandbox tools (`run_in_sandbox`, `gdb_*`). Given a bug
-description (and optionally the code), it decides what to run, invokes the
-sandbox, reads the bounded trace, and iterates toward a localization -- the
-ARCTIC loop in miniature. Besides one-shot runs it can open an interactive gdb
-session in the sandbox and drive it command by command.
-
-Run it:  python -m agentbox.agent.agent "find the bug in this program" --code examples/crash.c
-"""
+# A tool-calling loop over the sandbox tools (run_in_sandbox + gdb_*) that
+# gathers runtime evidence and iterates toward a bug location.
+#   python -m agentbox.agent.agent "find the bug" --code examples/crash.c
+"""Build and run the Agentbox LangChain agent."""
 from __future__ import annotations
 
 import argparse
@@ -33,8 +27,7 @@ SYSTEM_PROMPT = (
 
 
 def build_agent(model: str | None = None, verbose: bool = True):
-    """Construct the AgentExecutor. Requires langchain + langchain-anthropic and
-    an Anthropic credential (ANTHROPIC_API_KEY or an `ant auth login` profile)."""
+    """Construct the AgentExecutor (needs langchain-anthropic + an Anthropic credential)."""
     from langchain.agents import AgentExecutor, create_tool_calling_agent
     from langchain_anthropic import ChatAnthropic
     from langchain_core.prompts import ChatPromptTemplate
@@ -53,8 +46,7 @@ def build_agent(model: str | None = None, verbose: bool = True):
 
 
 def run_agent(task: str, code: str | None = None, model: str | None = None) -> str:
-    """Run the agent once on `task`. If `code` is given, it is appended to the
-    prompt so the agent has the source alongside the runtime evidence it gathers."""
+    """Run the agent once on `task`, appending `code` to the prompt if given."""
     executor = build_agent(model=model)
     prompt = task
     if code:

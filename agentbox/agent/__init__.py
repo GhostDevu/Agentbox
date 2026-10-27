@@ -1,9 +1,4 @@
-"""The LangChain agent that invokes Agentbox.
+"""The LangChain agent that drives Agentbox's sandbox tools."""
+from .tools import build_sandbox_tool, build_tools, run_in_sandbox
 
-`tools` exposes the sandbox to the LLM as a single structured tool. `agent`
-builds the tool-calling agent around it. The agent is intentionally thin: the
-research lives in the sandbox and tracer layers, not here.
-"""
-from .tools import build_sandbox_tool, run_in_sandbox
-
-__all__ = ["build_sandbox_tool", "run_in_sandbox"]
+__all__ = ["build_sandbox_tool", "build_tools", "run_in_sandbox"]

@@ -1,9 +1,6 @@
-"""Smoke test: exercise the sandbox + tracer data flow WITHOUT the LLM.
-
-Run:  python scripts/smoke.py
-Shows, for a benign target: build -> run -> host tracer observes -> bounded
-result. No API key required. This is the fastest way to see the baseline work.
-"""
+# Shows build -> run -> host tracer observes -> bounded result for a benign
+# target, no API key:  python scripts/smoke.py
+"""Smoke test: the sandbox + tracer data flow without the LLM."""
 import os
 import sys
 

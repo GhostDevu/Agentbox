@@ -1,10 +1,4 @@
-"""Tests for the mock sandbox and tracer plumbing.
-
-These exercise the data flow (build -> run -> trace -> bounded result) and the
-teardown guarantee without needing an LLM or an API key. They skip gracefully
-when a given toolchain/tracer is absent so the suite runs on both macOS and the
-Linux VM.
-"""
+"""Tests for the mock sandbox and tracer plumbing (no LLM; skip when tools absent)."""
 import os
 import shutil
 
@@ -101,5 +95,4 @@ def test_c_hello_compiles_and_runs():
 def test_tracer_registry_reports_availability():
     avail = available_tracers()
     assert set(avail) >= {"strace", "gdb", "dtrace"}
-    # Values are booleans; at least the mapping exists on any host.
     assert all(isinstance(v, bool) for v in avail.values())

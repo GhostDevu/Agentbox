@@ -1,9 +1,5 @@
-/* Probe PROCESS-LIMIT (fork containment): how many processes can the target
- * create? hardened caps it via RLIMIT_NPROC / cgroup pids.max -> only a few
- * succeed (CONTAINED). weak applies no limit -> many succeed (CROSSED).
- *
- * BENIGN and BOUNDED: it attempts at most MAX children, each sleeps briefly and
- * exits, and the parent kills/reaps them. This is NOT a real fork bomb. */
+/* Probe fork containment: hardened caps processes (CONTAINED), weak doesn't
+ * (CROSSED). Benign and bounded: at most MAX short-lived children, all reaped. */
 #include <signal.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -11,7 +7,7 @@
 #include <unistd.h>
 
 #define MAX 250
-#define THRESHOLD 150 /* >= this many => effectively unlimited => CROSSED */
+#define THRESHOLD 150 /* >= this many => effectively unlimited */
 
 int main(void) {
     pid_t kids[MAX];

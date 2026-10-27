@@ -1,25 +1,15 @@
 #!/usr/bin/env bash
-# Build the dev image and run a command inside it with the Agentbox tree mounted.
-#
-#   docker/run.sh                      # -> runs scripts/ns_demo.py
+# Build the dev image and run a command with the Agentbox tree mounted.
+#   docker/run.sh                      # -> scripts/ns_demo.py
 #   docker/run.sh python scripts/smoke.py
 #   docker/run.sh bash                 # interactive shell
 #
-# Notes on the flags:
-# Why --privileged for the OUTER container (the sandbox stays unprivileged):
-#   * Docker's default seccomp profile blocks clone(CLONE_NEWUSER) and its
-#     masked /proc trips the kernel's mount_too_revealing check on a nested
-#     procfs; and its cgroup v2 fs is mounted read-only, so cgroup pids.max /
-#     memory.max cannot be delegated.
-#   * --privileged lifts all three, emulating an ordinary Linux VM where the
-#     sandbox launcher can set up namespaces and delegate cgroups. abx_init
-#     itself still runs unprivileged: user namespace, all capabilities dropped,
-#     NO_NEW_PRIVS and a seccomp filter. On a real VM none of these flags are
-#     needed. (For a namespaces-only demo without cgroup limits, the lighter
-#     "--security-opt seccomp=unconfined,systempaths=unconfined" suffices.)
+# --privileged is for the OUTER container only (to emulate a Linux VM with
+# writable cgroups and an unmasked /proc); abx_init itself always runs
+# unprivileged. On a real VM no flags are needed.
 set -euo pipefail
 
-here="$(cd "$(dirname "$0")/.." && pwd)"   # Agentbox/
+here="$(cd "$(dirname "$0")/.." && pwd)"   # repo root
 img="agentbox-dev"
 
 docker build -t "$img" -f "$here/docker/Dockerfile" "$here/docker" >/dev/null

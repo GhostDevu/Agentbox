@@ -1,5 +1,4 @@
-/* A benign canary: writes to stdout and makes a couple of syscalls so a
- * syscall tracer has something to show. Safe to run in the mock sandbox. */
+/* A benign canary: writes to stdout and makes a couple of syscalls to trace. */
 #include <stdio.h>
 #include <unistd.h>
 

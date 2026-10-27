@@ -1,17 +1,7 @@
-"""Demonstrate ONE-WAY tracing out of the sandbox (Linux).
-
-Two modes, both export runtime info to the host while the target stays contained:
-
-  1. strace (syscalls)  -- host-side tracer follows into the HARDENED sandbox;
-     works even though the target's own ptrace is denied by seccomp. The trace
-     file lives on the host, outside the sandbox: one-way by construction.
-  2. gdb (crash state)  -- in-sandbox tracer (host gdb hangs across namespaces),
-     runs the target as its child, writes the backtrace to an exported /out.
-     Uses the `traced` policy: ptrace permitted, every other dimension contained.
-
-Run inside the Linux VM / native Linux:
-    python3 scripts/trace_demo.py
-"""
+# Two one-way exports while the target stays contained: host-side strace
+# syscalls through the hardened sandbox, and an in-sandbox gdb crash backtrace
+# via /out.  Linux:  python3 scripts/trace_demo.py
+"""Demonstrate one-way tracing out of the sandbox."""
 import os
 import sys
 

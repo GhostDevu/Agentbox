@@ -1,7 +1,5 @@
-/* Canary probe C-1: can the target read a host file?
- * Tries to open /etc/hostname (a host path). On the hardened sandbox the root
- * is a clean pivoted rootfs, so this file does not exist -> CONTAINED. On the
- * weak policy the host FS is visible -> CROSSED. Benign: it only reads. */
+/* Probe host-file read: /etc/hostname is absent in the pivoted rootfs
+ * (CONTAINED) but visible when the host FS is shared (CROSSED). Benign: reads only. */
 #include <stdio.h>
 
 int main(void) {

@@ -1,7 +1,5 @@
-/* A benign but buggy target: a NULL-pointer write that faults with SIGSEGV.
- * Under the gdb tracer this yields a backtrace pointing at `clobber`, which is
- * the kind of crash-localization signal ARCTIC wants. Safe: it only crashes
- * itself. */
+/* A benign buggy target: a NULL-pointer write faulting with SIGSEGV, so gdb
+ * yields a backtrace pointing at `clobber`. Safe: it only crashes itself. */
 #include <stdio.h>
 
 static void clobber(int depth) {

@@ -1,9 +1,5 @@
-/* Probe SYSCALL (seccomp): is the dangerous syscall surface filtered?
- * ptrace(PTRACE_TRACEME) normally succeeds for a process. hardened installs a
- * seccomp-bpf filter that denies ptrace (and bpf, mount, setns, ... ) with
- * EPERM -> CONTAINED. weak installs no filter -> ptrace succeeds -> CROSSED.
- * ptrace is a good canary: it is the primary anti-debug / escalation primitive
- * we want a hostile target to be denied. Benign: traces nothing. */
+/* Probe seccomp: the hardened filter denies ptrace with EPERM (CONTAINED); with
+ * no filter ptrace(PTRACE_TRACEME) succeeds (CROSSED). Benign: traces nothing. */
 #include <errno.h>
 #include <stdio.h>
 #include <string.h>

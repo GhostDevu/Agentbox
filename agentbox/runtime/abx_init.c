@@ -1,32 +1,12 @@
 /*
- * abx_init: Agentbox's minimal container-init.
+ * abx_init: Agentbox's minimal container-init (Linux only).
  *
- * OUR OWN small sandbox runtime (not a bwrap wrapper), modelled on mini-docker
- * (../../mini-docker/container.cpp) and hardened toward bubblewrap. It covers
- * every isolation dimension, each independently toggled so the attack-model
- * presets can build a weak-vs-hardened gradient:
+ * Runs a target under namespaces + pivot_root + read-only root + no network +
+ * dropped caps + NO_NEW_PRIVS + rlimits + best-effort cgroup v2 + a seccomp-bpf
+ * deny filter. Each dimension toggles independently (--X / --no-X) so the
+ * presets can build a weak-vs-hardened gradient. Compiled by sandbox/ns.py.
  *
- *   filesystem : new mount ns + pivot_root into a clean rootfs + read-only root
- *   network    : new network namespace (no connectivity, loopback down)
- *   process    : new PID namespace (+ fresh /proc) and a PID-count cap
- *   IPC        : new IPC namespace
- *   UTS        : new UTS namespace (+ hostname)
- *   privilege  : user namespace + uid/gid map + drop all capabilities + NNP
- *   memory     : RLIMIT_AS (+ best-effort cgroup v2 memory.max)
- *   CPU/time   : RLIMIT_CPU (wall-clock timeout is enforced by the Python layer)
- *   files/fds  : RLIMIT_FSIZE, RLIMIT_NOFILE, RLIMIT_CORE=0, tmpfs /tmp
- *   syscalls   : a seccomp-bpf deny filter over the dangerous syscall surface
- *
- * Linux only; compiled on first use by agentbox/sandbox/ns.py.
- *
- * Usage: abx_init [flags] -- PROG [ARG...]
- *   namespaces (each --Xns creates/isolates, --no-Xns shares the host):
- *     --userns --pidns --ipcns --utsns --cgroupns --netns  (+ --no-* forms)
- *   behaviour:
- *     --pivot/--no-pivot  --ro-root/--no-ro-root
- *     --limits/--no-limits  --cgroup/--no-cgroup  --seccomp/--no-seccomp
- *   values: --rootfs DIR --hostname NAME
- *           --cpu S --mem-mb N --nproc N --fsize-mb N --nofile N --pids-max N
+ * Usage: abx_init [flags] -- PROG [ARG...]   (flags: see the parser in main())
  */
 #define _GNU_SOURCE
 #include <errno.h>
@@ -99,9 +79,8 @@ static void mkdir_p(const char *path) {
 }
 
 /* ---- seccomp: deny the dangerous syscall surface ---------------------- */
-/* Built at runtime so that tracing mode can keep ptrace while still denying
- * everything else. The filter is: check arch, then for each denied nr emit a
- * (JEQ -> RET EPERM) pair, else fall through to RET ALLOW. */
+/* Built at runtime so tracing mode can keep ptrace: check arch, then one
+ * (JEQ -> RET EPERM) pair per denied nr, else fall through to RET ALLOW. */
 static void install_seccomp(int allow_ptrace) {
 #if ABX_AUDIT_ARCH == 0
     (void)allow_ptrace;
@@ -233,8 +212,7 @@ static void do_mounts(struct opts *o) {
     if (syscall(SYS_pivot_root, ".", ".oldroot") < 0) die("pivot_root");
     if (chdir("/") < 0) die("chdir /");
 
-    /* fresh procfs gives the pid-namespace view; best-effort because a
-     * container with a masked /proc can refuse it (mount_too_revealing). */
+    /* fresh procfs for the pid-ns view; best-effort (a masked /proc can refuse). */
     if (o->pidns &&
         mount("proc", "/proc", "proc", MS_NOSUID | MS_NOEXEC | MS_NODEV, NULL) < 0)
         warnf("mount /proc");
@@ -242,9 +220,8 @@ static void do_mounts(struct opts *o) {
         warnf("mount /tmp");
     setup_dev();
 
-    /* read-only binds of host paths (a "tooled" rootfs, e.g. /usr /lib so an
-     * in-sandbox tracer like gdb can run). Sources live under /.oldroot until
-     * the old root is detached below. */
+    /* read-only binds of host paths (a "tooled" rootfs so in-sandbox gdb can run);
+     * sources live under /.oldroot until the old root is detached below. */
     for (int i = 0; i < o->nbinds; i++) {
         char src[600], dst[600];
         snprintf(src, sizeof src, "/.oldroot%s", o->bind_src[i]);
@@ -255,8 +232,7 @@ static void do_mounts(struct opts *o) {
         else
             warnf("bind-ro");
     }
-    /* the one-way export channel: a host dir mounted rw at /out. The in-sandbox
-     * tracer writes its trace here; the host reads it afterwards. */
+    /* one-way export channel: a host dir mounted rw at /out for the tracer. */
     if (o->out_dir) {
         char src[600];
         snprintf(src, sizeof src, "/.oldroot%s", o->out_dir);
@@ -337,12 +313,9 @@ static void write_maps(pid_t pid) {
 static char g_cgroup[512];
 
 static void setup_cgroup(pid_t pid, struct opts *o) {
-    /* Best-effort cgroup v2: create a child cgroup under a controller-enabled
-     * parent, set memory.max/pids.max, move the sandboxed pid into it. The
-     * parent must already have +pids/+memory in its subtree_control (cgroup v2
-     * delegation); on a real VM this is the current cgroup, on a container the
-     * harness prepares one and names it via --cgroup-parent. Fails silently
-     * where no writable delegated cgroup exists; rlimits are the fallback. */
+    /* Best-effort cgroup v2: make a child cgroup under a controller-enabled
+     * parent, set memory.max/pids.max, move the pid in. Fails silently without
+     * a writable delegated cgroup; rlimits are the fallback. */
     char base[480] = "";
     if (o->cgroup_parent && o->cgroup_parent[0]) {
         snprintf(base, sizeof base, "%s", o->cgroup_parent);

@@ -1,9 +1,5 @@
-/* Canary probe C-2: can the target reach the network?
- * Non-blocking connect to a public resolver (1.1.1.1:53) with a short timeout.
- * On the hardened sandbox the net namespace is new and empty -> connect fails
- * immediately (no route) -> CONTAINED. On the weak policy with real egress the
- * connect succeeds -> CROSSED. The timeout keeps the probe from hanging on a
- * host that silently drops outbound packets. Benign: sends nothing. */
+/* Probe network egress: non-blocking connect to 1.1.1.1:53. An empty net
+ * namespace fails (CONTAINED); real egress succeeds (CROSSED). Benign: sends nothing. */
 #include <arpa/inet.h>
 #include <errno.h>
 #include <fcntl.h>

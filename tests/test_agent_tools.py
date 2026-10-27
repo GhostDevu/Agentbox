@@ -1,8 +1,4 @@
-"""Tests for the agent's sandbox tools (no LLM, no langchain needed).
-
-The tools are plain functions; `build_tools()` only wraps them. These run the
-real NsSandbox, so they are Linux-only.
-"""
+"""Tests for the agent's sandbox tools against the real NsSandbox (Linux, no LLM)."""
 import os
 import sys
 
@@ -40,8 +36,7 @@ def test_run_in_sandbox_gdb_tracer_reports_crash():
 
 def test_run_in_sandbox_strace_tracer():
     from agentbox.agent.tools import run_in_sandbox
-    # hello.c, not crash.c: a crashing pid-1 target spins forever under host
-    # strace (see "Known issue" in CLAUDE.md), which is a runtime issue.
+    # hello.c, not crash.c: a crashing pid-1 target spins forever under host strace.
     out = run_in_sandbox(_hello(), tracer="strace")
     assert "write(" in out
 

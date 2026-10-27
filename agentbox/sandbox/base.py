@@ -1,12 +1,6 @@
-"""The Sandbox abstract data type.
-
-This is the contract the rest of ARCTIC depends on. A sandbox takes a
-`RunSpec` (what to run, how long, under which tracer) and returns a `RunResult`
-(what happened, plus a bounded trace artifact). Containment strength is a
-property of the *implementation*, reported via `containment_level`, not of this
-interface -- that is the whole point of piecing the boundary together behind a
-stable ADT.
-"""
+# A sandbox takes a RunSpec and returns a RunResult + bounded trace; containment
+# strength is a property of the implementation (containment_level), not this ADT.
+"""The Sandbox abstract data type."""
 from __future__ import annotations
 
 import abc
@@ -25,18 +19,12 @@ class Language(str, Enum):
 
 @dataclass
 class CodeObject:
-    """The thing to run: either inline source, or a path to a built artifact.
-
-    Exactly one of `source` / `path` is meaningful. For C, `source` is compiled
-    by the backend; for PYTHON it is run by the interpreter; for BINARY, `path`
-    points at an existing executable and `source` is ignored.
-    """
+    """The thing to run: inline `source` (C/Python) or a `path` to a built binary."""
 
     language: Language
     source: Optional[str] = None
     path: Optional[str] = None
-    # Human label used in logs and trace file names.
-    name: str = "target"
+    name: str = "target"          # label used in logs and trace file names
 
     def __post_init__(self) -> None:
         if self.language == Language.BINARY and not self.path:
@@ -59,27 +47,19 @@ class RunSpec:
 
 @dataclass
 class TraceArtifact:
-    """What a tracer produced for one run.
-
-    `raw_path` is the full on-disk trace (kept for the pipeline / evaluation);
-    `summary` is the bounded, caller-facing excerpt. `summary` is the only part
-    that should ever be forwarded to an LLM, because the raw trace is attacker-
-    influenced and unbounded.
-    """
+    """One run's trace: full `raw_path` on disk; bounded `summary` is the only part
+    safe to forward to an LLM (the raw trace is attacker-influenced and unbounded)."""
 
     tracer: str
     raw_path: Optional[str]
     summary: str
     truncated: bool = False
-    note: str = ""  # e.g. "tracer unavailable", "needs privileges"
+    note: str = ""                # e.g. "tracer unavailable", "needs privileges"
 
 
 @dataclass
 class RunResult:
-    """Outcome of a sandbox run. All fields are host-trusted except the three
-    captured from the target: `stdout`, `stderr`, and `trace.summary`. Callers
-    must treat those as untrusted data, never as instructions.
-    """
+    """A run's outcome; host-trusted except stdout/stderr/trace.summary (untrusted)."""
 
     exit_code: Optional[int]        # None if killed by timeout/signal pre-exit
     stdout: str
@@ -94,26 +74,16 @@ class RunResult:
 
 
 class Sandbox(abc.ABC):
-    """Runs a target and returns a traced result.
-
-    Implementations differ only in how strongly they isolate the target and how
-    the tracer reaches inside. The agent talks to this interface alone.
-    """
+    """Runs a target and returns a traced result; the agent talks to this alone."""
 
     #: Short implementation name, surfaced in results and logs.
     name: str = "sandbox"
 
-    #: Honest statement of what this backend contains. One of:
-    #:   "none"         -- runs on the host, no isolation (the mock)
-    #:   "namespaces"   -- Linux namespaces + seccomp (bubblewrap-class)
-    #:   "userspace-kernel" -- gVisor-class syscall interposition
-    #:   "microvm"      -- Firecracker-class hardware-virtualised
-    #: Evaluation claims must cite this, never the interface.
+    #: What this backend actually contains ("none", "namespaces", ...); cite this,
+    #: never the interface, in evaluation claims.
     containment_level: str = "none"
 
     @abc.abstractmethod
     def run(self, spec: RunSpec) -> RunResult:
-        """Execute `spec` and return a `RunResult`. Must not raise on target
-        failure (nonzero exit, crash, timeout); those are reported in the
-        result. May raise on caller error (bad spec, missing toolchain)."""
+        """Run `spec`; report target failure in the result, raise only on caller error."""
         raise NotImplementedError

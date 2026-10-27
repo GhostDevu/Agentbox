@@ -1,11 +1,6 @@
-"""Run the test suite WITHOUT installing pytest.
-
-Debian/Ubuntu strip pip/ensurepip, and installing python3-pytest needs sudo.
-This provides a minimal pytest-compatible shim (skip, mark.parametrize,
-mark.skipif) so tests/*.py run unchanged, and reports pass/fail/skip counts.
-
-    python3 scripts/run_tests.py
-"""
+# A minimal pytest shim (skip, mark.parametrize, mark.skipif) so tests/*.py run
+# without pytest installed.  python3 scripts/run_tests.py
+"""Run the test suite without installing pytest."""
 import importlib.util
 import os
 import sys

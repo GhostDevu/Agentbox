@@ -1,19 +1,13 @@
-/* Probe MEMORY (limit containment): how much memory can the target allocate?
- * hardened caps it via RLIMIT_AS (and best-effort cgroup memory.max) -> an
- * allocation well below the cap fails (CONTAINED). weak applies no limit -> the
- * allocation reaches the ceiling (CROSSED).
- *
- * BENIGN and BOUNDED: it allocates and touches at most MAX_MB in CHUNK_MB steps
- * and stops as soon as an allocation fails. With RLIMIT_AS the failing malloc
- * returns NULL cleanly; with cgroup memory.max the process may instead be
- * OOM-killed, which the sandbox reports as a kill signal. */
+/* Probe memory limit: hardened caps allocation (CONTAINED), weak doesn't
+ * (CROSSED). Benign and bounded: touches at most MAX_MB, stops at the first
+ * failure (RLIMIT_AS returns NULL; cgroup memory.max may OOM-kill instead). */
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
 #define CHUNK_MB 64
 #define MAX_MB 1024
-#define THRESHOLD_MB 1024 /* reaching this => effectively unlimited => CROSSED */
+#define THRESHOLD_MB 1024 /* reaching this => effectively unlimited */
 
 int main(void) {
     size_t chunk = (size_t)CHUNK_MB * 1024 * 1024;

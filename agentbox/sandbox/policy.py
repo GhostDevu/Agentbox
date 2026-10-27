@@ -1,13 +1,7 @@
-"""Isolation policies for the namespace sandbox.
-
-A policy is the full set of knobs `abx_init` understands -- one per isolation
-dimension. Two presets matter for the attack-model story: `hardened()` turns
-every dimension on (the containment claim); `weak()` turns them all off except
-the user namespace (needed to run unprivileged), so the same benign canary
-CROSSES on weak and is CONTAINED on hardened -- the probe-validity requirement
-in PRD §7. `custom()` lets a probe isolate exactly one dimension to show that
-dimension is the thing doing the containing.
-"""
+# A policy is the full set of abx_init knobs, one per isolation dimension.
+# A benign probe CROSSES on weak() and is CONTAINED on hardened(); custom()
+# turns one dimension back on to show it is the one doing the containing.
+"""Isolation policies for the namespace sandbox."""
 from __future__ import annotations
 
 from dataclasses import dataclass, replace
@@ -40,8 +34,7 @@ class Policy:
     pids_max: int = 64
 
     def to_args(self, rootfs: str | None) -> list[str]:
-        """Render as abx_init CLI flags (the program argv is appended by the
-        caller after a `--`)."""
+        """Render as abx_init CLI flags (program argv is appended after a `--`)."""
         def tog(flag: str, on: bool) -> list[str]:
             return [f"--{flag}"] if on else [f"--no-{flag}"]
 
@@ -68,28 +61,17 @@ class Policy:
 
 
 def hardened() -> Policy:
-    """Every isolation dimension on: user+mount+pid+ipc+uts+cgroup+net
-    namespaces, clean pivot_root, read-only root, dropped capabilities,
-    NO_NEW_PRIVS, rlimits, best-effort cgroup limits, and a seccomp deny filter.
-    This is the containment claim."""
+    """Every isolation dimension on -- the containment claim."""
     return Policy(name="hardened")
 
 
 def traced() -> Policy:
-    """Hardened, but with ptrace permitted under seccomp so an in-sandbox tracer
-    (gdb) can observe the target. This is the isolation<->observability trade-off
-    made explicit: the knob that blocks the target's anti-debug is the same knob
-    that blocks our tracer, so tracing mode relaxes exactly that one restriction.
-    Everything else (filesystem, network, pid, memory, caps, other syscalls)
-    stays fully contained."""
+    """Hardened, but ptrace permitted under seccomp so an in-sandbox gdb can observe."""
     return Policy(name="traced", allow_ptrace=True)
 
 
 def weak() -> Policy:
-    """Everything off except the user namespace (kept so the sandbox still runs
-    unprivileged). Shares the host filesystem, network, PID/IPC/UTS namespaces;
-    no read-only root, no limits, no cgroup, no seccomp. Every probe CROSSES.
-    For probe-validity demonstrations on BENIGN probes only."""
+    """Everything off except the user namespace; every probe CROSSES (benign probes only)."""
     return Policy(
         name="weak",
         pidns=False, ipcns=False, utsns=False, cgroupns=False, netns=False,
@@ -98,6 +80,5 @@ def weak() -> Policy:
 
 
 def custom(name: str, **overrides) -> Policy:
-    """A weak baseline with specific dimensions turned back on, to show that one
-    dimension is responsible for containing one probe (used by the test suite)."""
+    """A weak baseline with specific dimensions turned back on (used by the tests)."""
     return replace(weak(), name=name, **overrides)

@@ -1,21 +1,14 @@
 #!/usr/bin/env bash
-# Container entrypoint: set up a delegated, controller-enabled cgroup v2 parent
-# for the sandbox (best-effort), then run the requested command.
-#
-# cgroup v2 forbids a non-root cgroup from having both member processes and
-# enabled subtree controllers. A container's cgroup is non-root, so to let
-# abx_init create per-run child cgroups with pids.max/memory.max we must move
-# this shell out of the cgroup root into a leaf, enable +pids/+memory in the now
-# process-free root, and create an "abx" parent with controllers for ITS
-# children. This MUST run in the main shell (no command substitution): a
-# subshell's own PID would linger in the root and block the subtree_control
-# write. On a read-only cgroup fs this just no-ops and abx_init uses rlimits.
+# Best-effort cgroup v2 delegation so abx_init can set pids.max/memory.max, then
+# run the command. Move this shell to a leaf, enable +pids/+memory in the now
+# process-free root, and make an "abx" parent for per-run children. Must run in
+# the main shell (a subshell PID would block the subtree_control write); no-ops
+# on a read-only cgroup fs, where abx_init falls back to rlimits.
 CG=/sys/fs/cgroup
 if mkdir "$CG/.wt" 2>/dev/null; then
     rmdir "$CG/.wt" 2>/dev/null
     mkdir -p "$CG/init"
-    # move every process in the cgroup root (this shell included) into the leaf;
-    # the loop body is a builtin, so it forks nothing into the root.
+    # move every root process (this shell included) into the leaf; no forks.
     while read -r p; do echo "$p" > "$CG/init/cgroup.procs" 2>/dev/null; done < "$CG/cgroup.procs"
     if echo "+pids +memory" > "$CG/cgroup.subtree_control" 2>/dev/null; then
         mkdir -p "$CG/abx"

@@ -1,12 +1,6 @@
-"""Demonstrate the NsSandbox containment gradient across every dimension (Linux).
-
-Runs each canary probe under the WEAK policy (expect CROSSED) and the HARDENED
-policy (expect CONTAINED). This is the probe-validity check from PRD §7: a probe
-is only meaningful if it crosses on weak and is contained on hardened.
-
-Run inside the Linux VM / Docker:
-    python scripts/ns_demo.py
-"""
+# Runs each canary probe under weak (expect CROSSED) and hardened (expect
+# CONTAINED), the probe-validity check.  Linux:  python scripts/ns_demo.py
+"""Demonstrate the NsSandbox containment gradient across every dimension."""
 import os
 import sys
 

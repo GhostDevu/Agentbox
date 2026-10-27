@@ -1,9 +1,5 @@
-/* Probe PROCESS: is the target in an isolated PID namespace?
- * In a new PID namespace the target execs as PID 1 (the namespace init), so it
- * cannot see or signal host/container processes -> CONTAINED. When the host PID
- * namespace is shared (weak), the target gets an ordinary high PID and host
- * processes are visible -> CROSSED. getpid() is a robust discriminator that
- * does not depend on /proc being mounted. */
+/* Probe PID namespace: a new namespace makes the target pid 1 (CONTAINED); a
+ * shared host namespace gives an ordinary pid (CROSSED). getpid() needs no /proc. */
 #include <stdio.h>
 #include <unistd.h>
 

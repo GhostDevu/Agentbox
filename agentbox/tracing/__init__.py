@@ -1,14 +1,7 @@
-"""Tracer ADT and registry.
-
-A tracer's job is to *launch the target as its child* and record what the target
-does, then hand back a bounded summary. Launch-as-child (not attach-to-running)
-is deliberate: it closes the attach TOCTTOU window and captures the target from
-its very first instruction (see RESEARCH.md Q8).
-
-`get_tracer(name)` resolves a name ("strace", "gdb", "dtrace", "none", or
-"auto") to an instance, falling back to the NullTracer when the requested tool
-is not available on this host.
-"""
+# A tracer launches the target as its child (not attach), so it captures the
+# target from its first instruction. get_tracer() resolves a name, falling back
+# to NullTracer when the requested tool is unavailable.
+"""Tracer ADT and registry."""
 from __future__ import annotations
 
 from .base import NullTracer, Tracer
@@ -16,8 +9,7 @@ from .dtrace import DtraceTracer
 from .gdb import GdbTracer
 from .strace import StraceTracer
 
-# Order matters for "auto": prefer syscall-level tracing (ARCTIC's primary
-# signal), then a crash/backtrace tracer, then macOS dtrace.
+# "auto" order: syscall tracing first, then crash/backtrace, then dtrace.
 _REGISTRY: dict[str, type[Tracer]] = {
     "strace": StraceTracer,
     "gdb": GdbTracer,
@@ -41,7 +33,6 @@ def get_tracer(name: str) -> Tracer:
         raise ValueError(f"unknown tracer: {name!r}; known: {sorted(_REGISTRY)}")
     inst = cls()
     if not inst.available():
-        # Fall back but record why, so the agent sees an honest note.
         return NullTracer(note=f"requested tracer {name!r} unavailable on this host")
     return inst
 
